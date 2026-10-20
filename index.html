@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Черв’як-гурман</title>
+<style>
+:root{--bg:#e9dfc8;--ink:#3b2a1a;--panel:#fffaf0;--acc:#b5533c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1812;--ink:#f1e4c8;--panel:#2a2219;--acc:#e08a64}}
+:root[data-theme="dark"]{--bg:#1d1812;--ink:#f1e4c8;--panel:#2a2219;--acc:#e08a64}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS",Verdana,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;overflow:hidden;touch-action:none}
+#hud{display:flex;gap:18px;font-weight:700;font-size:18px}
+canvas{background:#6b8f3a;border:4px solid var(--ink);border-radius:10px;width:min(96vw,720px);height:auto;aspect-ratio:3/2;touch-action:none}
+#ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
+#ov div{background:var(--panel);padding:22px 26px;border-radius:14px;text-align:center;max-width:320px}
+h1{margin:0 0 8px;font-size:26px}
+p{margin:6px 0;line-height:1.4}
+button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 22px;font-size:17px;cursor:pointer;margin-top:10px}
+button:focus-visible{outline:3px solid var(--ink)}
+</style>
+</head>
+<body>
+<div id="hud"><span>🍩 Очки: <b id="sc">0</b></span><span>❤️ <b id="lv">3</b></span><span>🏆 <b id="bs">0</b></span></div>
+<canvas id="c" width="720" height="480"></canvas>
+<div id="ov"><div><h1 id="t">🪱 Черв’як-гурман</h1><p id="m">Їж какашки 💩 і уникай шахедів! Керування: стрілки / WASD або тягни пальцем.</p><button id="b">Грати</button></div></div>
+<script>
+(function(){
+window.addEventListener('error',function(e){var m=document.getElementById('m');if(m)m.textContent='Помилка: '+e.message});
+var cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=720,H=480;
+function g(id){return document.getElementById(id)}
+var worm,dir={x:1,y:0},want=null,target=null,poop=[],drones=[],score=0,lives=3,best=0,run=false,inv=0,tick=0;
+try{best=+localStorage.getItem('wb')||0}catch(e){}
+g('bs').textContent=best;
+function rnd(a,b){return a+Math.random()*(b-a)}
+function spawnPoop(){poop.push({x:rnd(30,W-30),y:rnd(30,H-30)})}
+function spawnDrone(){
+  var side=Math.floor(rnd(0,4)),s=rnd(1.4,2.2)+score*.005,d;
+  if(side===0)d={x:-40,y:rnd(0,H),vx:s,vy:rnd(-.5,.5)};
+  else if(side===1)d={x:W+40,y:rnd(0,H),vx:-s,vy:rnd(-.5,.5)};
+  else if(side===2)d={x:rnd(0,W),y:-40,vx:rnd(-.5,.5),vy:s};
+  else d={x:rnd(0,W),y:H+40,vx:rnd(-.5,.5),vy:-s};
+  drones.push(d);
+}
+function ui(){g('sc').textContent=score;g('lv').textContent=lives;g('bs').textContent=best}
+function start(){
+  worm=[];for(var i=0;i<8;i++)worm.push({x:W/2-i*3,y:H/2});
+  dir={x:1,y:0};want=null;target=null;poop=[];drones=[];score=0;lives=3;inv=0;tick=0;
+  for(i=0;i<8;i++)spawnPoop();
+  spawnDrone();spawnDrone();
+  g('ov').style.display='none';run=true;ui();
+}
+function end(){
+  run=false;if(score>best){best=score;try{localStorage.setItem('wb',best)}catch(e){}}
+  ui();g('t').textContent='💥 Гра закінчена';g('m').textContent='Твій рахунок: '+score+'. Шахеди перемогли цього разу.';g('b').textContent='Ще раз';g('ov').style.display='flex';
+}
+function update(){
+  tick++;
+  var h=worm[0];
+  if(target){var ax=target.x-h.x,ay=target.y-h.y,l=Math.hypot(ax,ay);if(l>6)dir={x:ax/l,y:ay/l}}
+  else if(want){dir=want}
+  var nx=(h.x+dir.x*3.2+W)%W,ny=(h.y+dir.y*3.2+H)%H;
+  worm.unshift({x:nx,y:ny});worm.pop();
+  for(var i=poop.length-1;i>=0;i--){
+    if(Math.hypot(poop[i].x-nx,poop[i].y-ny)<22){
+      poop.splice(i,1);score+=10;
+      var tl=worm[worm.length-1];for(var k=0;k<3;k++)worm.push({x:tl.x,y:tl.y});
+      spawnPoop();
+      if(score%50===0)spawnDrone();
+      ui();
+    }
+  }
+  if(tick%300===0&&poop.length<12)spawnPoop();
+  for(i=0;i<drones.length;i++){
+    var d=drones[i];d.x+=d.vx;d.y+=d.vy;
+    if(d.x<-90||d.x>W+90||d.y<-90||d.y>H+90){
+      var sp=Math.hypot(d.vx,d.vy),a=Math.atan2(H/2+rnd(-150,150)-d.y,W/2+rnd(-200,200)-d.x);
+      d.vx=Math.cos(a)*sp;d.vy=Math.sin(a)*sp;
+    }
+    if(!inv&&Math.hypot(d.x-nx,d.y-ny)<26){lives--;inv=90;ui();if(lives<=0){end();return}}
+  }
+  if(inv)inv--;
+}
+function drawDrone(d){
+  ctx.save();ctx.translate(d.x,d.y);ctx.rotate(Math.atan2(d.vy,d.vx));
+  ctx.fillStyle='#555d46';ctx.strokeStyle='#2a2f22';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(24,0);ctx.lineTo(-14,-18);ctx.lineTo(-18,-18);ctx.lineTo(-18,18);ctx.lineTo(-14,18);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#d94a3a';ctx.fillRect(-16,-3,6,6);ctx.restore();
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.font='24px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  for(var i=0;i<poop.length;i++)ctx.fillText('💩',poop[i].x,poop[i].y);
+  if(worm){
+    for(i=worm.length-1;i>=0;i--){
+      var p=worm[i];
+      ctx.globalAlpha=(inv&&Math.floor(tick/5)%2)?.4:1;
+      ctx.fillStyle=i===0?'#f08a9a':(Math.floor(i/3)%2?'#e2748a':'#f09aa8');
+      ctx.beginPath();ctx.arc(p.x,p.y,i===0?12:10,0,7);ctx.fill();
+    }
+    ctx.globalAlpha=1;var h=worm[0];
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(h.x-4,h.y-4,3.5,0,7);ctx.arc(h.x+4,h.y-4,3.5,0,7);ctx.fill();
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(h.x-4+dir.x*1.5,h.y-4+dir.y*1.5,1.5,0,7);ctx.arc(h.x+4+dir.x*1.5,h.y-4+dir.y*1.5,1.5,0,7);ctx.fill();
+  }
+  for(i=0;i<drones.length;i++)drawDrone(drones[i]);
+}
+function loop(){if(run)update();draw();requestAnimationFrame(loop)}
+g('b').addEventListener('click',start);
+var map={arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0],arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1]};
+document.addEventListener('keydown',function(e){
+  var k=e.key.toLowerCase();
+  if(map[k]){want={x:map[k][0],y:map[k][1]};target=null;e.preventDefault()}
+  else if(k==='enter'&&!run)start();
+});
+function pt(e){var r=cv.getBoundingClientRect();target={x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+cv.addEventListener('pointerdown',pt);
+cv.addEventListener('pointermove',function(e){if(target)pt(e)});
+window.addEventListener('pointerup',function(){if(target){want=dir;target=null}});
+loop();
+})();
+</script>
+</body>
+</html>
